@@ -68,5 +68,6 @@ func (c *Client) printHelp() {
 	c.Msg("/login <user> <pass>    - Login to account")
 	c.Msg("/logout          - Logout current session")
 	c.Msg("/whoami          - Show auth identity")
+	c.Msg("/history [n] or /history before <id> [n] - Show room history")
 	c.Msg("/quit            - Disconnect")
 }
