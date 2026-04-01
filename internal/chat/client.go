@@ -62,5 +62,6 @@ func (c *Client) printHelp() {
 	c.Msg("/join <room>     - Join or create a room")
 	c.Msg("/rooms           - List rooms")
 	c.Msg("/msg <message>   - Send message to current room")
+	c.Msg("/dm <nick> <msg> - Send direct message")
 	c.Msg("/quit            - Disconnect")
 }
