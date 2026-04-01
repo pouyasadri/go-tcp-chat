@@ -81,6 +81,14 @@ func TestSaveAndListRoomMessages(t *testing.T) {
 	if messages[0].Body != "world" {
 		t.Fatalf("expected newest message first, got %q", messages[0].Body)
 	}
+
+	before, err := store.ListRoomMessagesBefore(context.Background(), room.ID, messages[0].ID, 10)
+	if err != nil {
+		t.Fatalf("list messages before: %v", err)
+	}
+	if len(before) != 1 || before[0].Body != "hello" {
+		t.Fatalf("expected one older message 'hello', got %+v", before)
+	}
 }
 
 func TestCreateAndGetUser(t *testing.T) {
