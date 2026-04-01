@@ -178,6 +178,7 @@ func TestDMValidation(t *testing.T) {
 type authStore struct {
 	nextUserID int64
 	users      map[string]store.User
+	messages   []store.Message
 }
 
 func newAuthStore() *authStore {
@@ -211,11 +212,36 @@ func (a *authStore) ListRooms(_ context.Context) ([]store.Room, error) {
 }
 
 func (a *authStore) SaveMessage(_ context.Context, roomID int64, senderUserID *int64, senderNick, body string) (store.Message, error) {
-	return store.Message{RoomID: roomID, SenderUserID: senderUserID, SenderNick: senderNick, Body: body}, nil
+	msg := store.Message{ID: int64(len(a.messages) + 1), RoomID: roomID, SenderUserID: senderUserID, SenderNick: senderNick, Body: body, CreatedAt: time.Now().UTC()}
+	a.messages = append(a.messages, msg)
+	return msg, nil
 }
 
 func (a *authStore) ListRoomMessages(_ context.Context, roomID int64, limit int) ([]store.Message, error) {
-	return nil, nil
+	if limit <= 0 {
+		limit = 20
+	}
+	out := make([]store.Message, 0)
+	for i := len(a.messages) - 1; i >= 0 && len(out) < limit; i-- {
+		if a.messages[i].RoomID == roomID {
+			out = append(out, a.messages[i])
+		}
+	}
+	return out, nil
+}
+
+func (a *authStore) ListRoomMessagesBefore(_ context.Context, roomID, beforeID int64, limit int) ([]store.Message, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	out := make([]store.Message, 0)
+	for i := len(a.messages) - 1; i >= 0 && len(out) < limit; i-- {
+		msg := a.messages[i]
+		if msg.RoomID == roomID && msg.ID < beforeID {
+			out = append(out, msg)
+		}
+	}
+	return out, nil
 }
 
 func TestRegisterLoginLogoutWhoAmI(t *testing.T) {
@@ -247,5 +273,28 @@ func TestRegisterLoginLogoutWhoAmI(t *testing.T) {
 	s.WhoAmI(c)
 	if !strings.Contains(conn.String(), "logged in as alice") {
 		t.Fatalf("unexpected whoami output: %q", conn.String())
+	}
+}
+
+func TestHistoryCommand(t *testing.T) {
+	a := newAuthStore()
+	s := NewServer(a)
+	c, conn := newTestClient()
+
+	room := &Room{ID: 1, Name: "general", Members: map[net.Addr]*Client{c.Conn.RemoteAddr(): c}}
+	c.Room = room
+
+	_, _ = a.SaveMessage(context.Background(), 1, nil, "alice", "first")
+	_, _ = a.SaveMessage(context.Background(), 1, nil, "bob", "second")
+
+	s.History(c, []string{"/history"})
+	if !strings.Contains(conn.String(), "alice: first") || !strings.Contains(conn.String(), "bob: second") {
+		t.Fatalf("unexpected history output: %q", conn.String())
+	}
+
+	conn.Reset()
+	s.History(c, []string{"/history", "before", "2", "10"})
+	if !strings.Contains(conn.String(), "alice: first") || strings.Contains(conn.String(), "bob: second") {
+		t.Fatalf("unexpected paginated history output: %q", conn.String())
 	}
 }

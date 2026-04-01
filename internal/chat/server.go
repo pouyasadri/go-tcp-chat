@@ -7,7 +7,9 @@ import (
 	"log"
 	"net"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pouyasadri/go-tcp-chat/internal/store"
 	"golang.org/x/crypto/bcrypt"
@@ -56,6 +58,8 @@ func (s *Server) Run() {
 			s.Logout(cmd.Client)
 		case CMDWhoAmI:
 			s.WhoAmI(cmd.Client)
+		case CMDHistory:
+			s.History(cmd.Client, cmd.Args)
 		case CMDQuit:
 			s.Quit(cmd.Client)
 		}
@@ -214,6 +218,7 @@ func (s *Server) Join(c *Client, args []string) {
 	c.Room = r
 	c.Room.Broadcast(c, fmt.Sprintf("%s has joined the room", c.NickName))
 	c.Msg(fmt.Sprintf("Welcome to %s", roomName))
+	s.printRecentHistory(c, 20)
 }
 
 func (s *Server) ListRooms(c *Client) {
@@ -307,6 +312,99 @@ func (s *Server) DM(c *Client, args []string) {
 	message := strings.Join(args[2:], " ")
 	recipient.Msg(fmt.Sprintf("[DM from %s] %s", c.NickName, message))
 	c.Msg(fmt.Sprintf("[DM to %s] %s", targetNick, message))
+}
+
+func (s *Server) History(c *Client, args []string) {
+	if s.store == nil {
+		c.Err(fmt.Errorf("history is unavailable"))
+		return
+	}
+	if c.Room == nil {
+		c.Err(fmt.Errorf("you must join a room before requesting history"))
+		return
+	}
+
+	limit, beforeID, err := parseHistoryArgs(args)
+	if err != nil {
+		c.Err(err)
+		return
+	}
+
+	var messages []store.Message
+	if beforeID == nil {
+		messages, err = s.store.ListRoomMessages(context.Background(), c.Room.ID, limit)
+	} else {
+		messages, err = s.store.ListRoomMessagesBefore(context.Background(), c.Room.ID, *beforeID, limit)
+	}
+	if err != nil {
+		c.Err(fmt.Errorf("failed to read history"))
+		return
+	}
+
+	s.printMessages(c, messages)
+}
+
+func parseHistoryArgs(args []string) (int, *int64, error) {
+	const defaultLimit = 20
+
+	if len(args) == 1 {
+		return defaultLimit, nil, nil
+	}
+
+	if args[1] == "before" {
+		if len(args) < 3 {
+			return 0, nil, fmt.Errorf("usage: /history [n] or /history before <id> [n]")
+		}
+		beforeID, err := strconv.ParseInt(args[2], 10, 64)
+		if err != nil || beforeID <= 0 {
+			return 0, nil, fmt.Errorf("invalid message id for /history before")
+		}
+
+		limit := defaultLimit
+		if len(args) >= 4 {
+			parsedLimit, err := strconv.Atoi(args[3])
+			if err != nil || parsedLimit <= 0 || parsedLimit > 100 {
+				return 0, nil, fmt.Errorf("history limit must be between 1 and 100")
+			}
+			limit = parsedLimit
+		}
+
+		return limit, &beforeID, nil
+	}
+
+	limit, err := strconv.Atoi(args[1])
+	if err != nil || limit <= 0 || limit > 100 {
+		return 0, nil, fmt.Errorf("history limit must be between 1 and 100")
+	}
+
+	return limit, nil, nil
+}
+
+func (s *Server) printRecentHistory(c *Client, limit int) {
+	if s.store == nil || c.Room == nil {
+		return
+	}
+
+	messages, err := s.store.ListRoomMessages(context.Background(), c.Room.ID, limit)
+	if err != nil || len(messages) == 0 {
+		return
+	}
+
+	c.Msg("Recent history:")
+	s.printMessages(c, messages)
+}
+
+func (s *Server) printMessages(c *Client, messages []store.Message) {
+	if len(messages) == 0 {
+		c.Msg("No message history found")
+		return
+	}
+
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+		ts := msg.CreatedAt.Format(time.RFC3339)
+		c.Msg(fmt.Sprintf("[#%d %s] %s: %s", msg.ID, ts, msg.SenderNick, msg.Body))
+	}
 }
 
 func normalizeUsername(username string) string {
