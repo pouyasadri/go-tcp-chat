@@ -35,8 +35,8 @@ flowchart LR
     S --> Auth[Auth commands]
     S --> R1[Room: general]
     S --> R2[Room: random]
-    S --> H[/history command]
-    S --> D[/dm command]
+    S --> H["/history command"]
+    S --> D["/dm command"]
     S --> DB[(SQLite)]
     R1 --> O[Broadcast to local room members]
     H --> DB
