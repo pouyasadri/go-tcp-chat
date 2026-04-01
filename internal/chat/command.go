@@ -9,6 +9,10 @@ const (
 	CMDRooms
 	CMDMsg
 	CMDDM
+	CMDRegister
+	CMDLogin
+	CMDLogout
+	CMDWhoAmI
 	CMDQuit
 )
 
@@ -37,6 +41,14 @@ func parseInput(line string) (CommandID, []string, bool) {
 		return CMDMsg, args, true
 	case "/dm":
 		return CMDDM, args, true
+	case "/register":
+		return CMDRegister, args, true
+	case "/login":
+		return CMDLogin, args, true
+	case "/logout":
+		return CMDLogout, args, true
+	case "/whoami":
+		return CMDWhoAmI, args, true
 	case "/quit":
 		return CMDQuit, args, true
 	default:
