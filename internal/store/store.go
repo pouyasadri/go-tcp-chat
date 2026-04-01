@@ -43,4 +43,5 @@ type RoomStore interface {
 type MessageStore interface {
 	SaveMessage(ctx context.Context, roomID int64, senderUserID *int64, senderNick, body string) (Message, error)
 	ListRoomMessages(ctx context.Context, roomID int64, limit int) ([]Message, error)
+	ListRoomMessagesBefore(ctx context.Context, roomID, beforeID int64, limit int) ([]Message, error)
 }
