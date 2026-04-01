@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/pouyasadri/go-tcp-chat/internal/store"
 )
@@ -17,6 +18,9 @@ func (s *Store) CreateUser(ctx context.Context, username, passwordHash string) (
 		passwordHash,
 	)
 	if err != nil {
+		if isUniqueConstraintErr(err) {
+			return store.User{}, store.ErrUserExists
+		}
 		return store.User{}, fmt.Errorf("create user: %w", err)
 	}
 
@@ -185,4 +189,11 @@ func (s *Store) getMessageByID(ctx context.Context, id int64) (store.Message, er
 	}
 
 	return msg, nil
+}
+
+func isUniqueConstraintErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "unique")
 }
