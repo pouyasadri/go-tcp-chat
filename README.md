@@ -101,6 +101,10 @@ Then use commands like:
 - `/rooms` list active rooms (sorted)
 - `/msg <message>` send a message to current room
 - `/dm <nick> <message>` send a direct message to a user in the same room
+- `/register <username> <password>` create an account and login
+- `/login <username> <password>` login with an existing account
+- `/logout` clear auth session for current connection
+- `/whoami` show current identity state
 - `/quit` disconnect
 
 ## Notes on design
@@ -108,6 +112,7 @@ Then use commands like:
 - The server owns room state and processes commands from clients through a channel.
 - A client must join a room before sending messages.
 - Direct messages only work for users in the same room.
+- `/dm` requires an authenticated user (`/register` or `/login`).
 - Empty rooms are cleaned up automatically when users leave.
 - Unknown commands return an error plus help text to improve UX.
 
@@ -122,6 +127,7 @@ go vet ./...
 
 ## Next improvements
 
+- Add room message history command (`/history`) with pagination
 - Add graceful shutdown with context and OS signals
 - Add connection deadlines and idle timeout handling
 - Add integration tests for multi-client flows
