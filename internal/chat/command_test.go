@@ -15,6 +15,7 @@ func TestParseInput(t *testing.T) {
 		{name: "join", line: "/join general", wantID: CMDJoin, wantOK: true, wantLen: 2},
 		{name: "rooms", line: "/rooms", wantID: CMDRooms, wantOK: true, wantLen: 1},
 		{name: "msg", line: "/msg hello world", wantID: CMDMsg, wantOK: true, wantLen: 3},
+		{name: "dm", line: "/dm alice hey there", wantID: CMDDM, wantOK: true, wantLen: 4},
 		{name: "quit", line: "/quit", wantID: CMDQuit, wantOK: true, wantLen: 1},
 		{name: "empty", line: " ", wantID: CMDHelp, wantOK: false, wantLen: 0},
 		{name: "unknown", line: "/noop", wantID: CMDHelp, wantOK: false, wantLen: 1},
