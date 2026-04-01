@@ -1,22 +1,32 @@
 package chat
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
 	"slices"
 	"strings"
+
+	"github.com/pouyasadri/go-tcp-chat/internal/store"
 )
 
 type Server struct {
 	rooms    map[string]*Room
 	commands chan Command
+	store    persistence
 }
 
-func NewServer() *Server {
+type persistence interface {
+	store.RoomStore
+	store.MessageStore
+}
+
+func NewServer(p persistence) *Server {
 	return &Server{
 		rooms:    make(map[string]*Room),
 		commands: make(chan Command),
+		store:    p,
 	}
 }
 
@@ -79,11 +89,23 @@ func (s *Server) Join(c *Client, args []string) {
 
 	r, ok := s.rooms[roomName]
 	if !ok {
-		r = &Room{
-			Name:    roomName,
-			Members: make(map[net.Addr]*Client),
+		r = &Room{Name: roomName, Members: make(map[net.Addr]*Client)}
+		if s.store != nil {
+			persisted, err := s.store.FindOrCreateRoom(context.Background(), roomName)
+			if err != nil {
+				c.Err(fmt.Errorf("failed to join room: %w", err))
+				return
+			}
+			r.ID = persisted.ID
 		}
 		s.rooms[roomName] = r
+	} else if s.store != nil && r.ID == 0 {
+		persisted, err := s.store.FindOrCreateRoom(context.Background(), roomName)
+		if err != nil {
+			c.Err(fmt.Errorf("failed to join room: %w", err))
+			return
+		}
+		r.ID = persisted.ID
 	}
 
 	r.Members[c.Conn.RemoteAddr()] = c
@@ -93,6 +115,25 @@ func (s *Server) Join(c *Client, args []string) {
 }
 
 func (s *Server) ListRooms(c *Client) {
+	if s.store != nil {
+		rooms, err := s.store.ListRooms(context.Background())
+		if err != nil {
+			c.Err(fmt.Errorf("failed to list rooms: %w", err))
+			return
+		}
+		if len(rooms) == 0 {
+			c.Msg("No rooms available yet. Create one with /join <room>.")
+			return
+		}
+
+		names := make([]string, 0, len(rooms))
+		for _, room := range rooms {
+			names = append(names, room.Name)
+		}
+		c.Msg(fmt.Sprintf("Available rooms: %s", strings.Join(names, ", ")))
+		return
+	}
+
 	if len(s.rooms) == 0 {
 		c.Msg("No rooms available yet. Create one with /join <room>.")
 		return
@@ -118,6 +159,13 @@ func (s *Server) Msg(c *Client, args []string) {
 	}
 
 	msg := strings.Join(args[1:], " ")
+	if s.store != nil {
+		_, err := s.store.SaveMessage(context.Background(), c.Room.ID, nil, c.NickName, msg)
+		if err != nil {
+			c.Err(fmt.Errorf("failed to persist message: %w", err))
+			return
+		}
+	}
 	c.Room.Broadcast(c, fmt.Sprintf("%s: %s", c.NickName, msg))
 }
 

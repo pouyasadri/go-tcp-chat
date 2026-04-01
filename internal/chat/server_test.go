@@ -44,7 +44,7 @@ func (s *stubConn) SetWriteDeadline(_ time.Time) error {
 }
 
 func TestNickValidationAndUpdate(t *testing.T) {
-	s := NewServer()
+	s := NewServer(nil)
 	c, conn := newTestClient()
 
 	s.Nick(c, []string{"/nick"})
@@ -61,7 +61,7 @@ func TestNickValidationAndUpdate(t *testing.T) {
 }
 
 func TestJoinSameRoomNoDuplicate(t *testing.T) {
-	s := NewServer()
+	s := NewServer(nil)
 	c, conn := newTestClient()
 
 	s.Join(c, []string{"/join", "general"})
@@ -79,7 +79,7 @@ func TestJoinSameRoomNoDuplicate(t *testing.T) {
 }
 
 func TestQuitCurrentRoomRemovesEmptyRoom(t *testing.T) {
-	s := NewServer()
+	s := NewServer(nil)
 	c, _ := newTestClient()
 
 	s.Join(c, []string{"/join", "general"})
@@ -97,7 +97,7 @@ func TestQuitCurrentRoomRemovesEmptyRoom(t *testing.T) {
 }
 
 func TestDMSendsToRecipientAndSenderConfirmation(t *testing.T) {
-	s := NewServer()
+	s := NewServer(nil)
 
 	senderConn := &stubConn{remote: stubAddr("sender")}
 	receiverConn := &stubConn{remote: stubAddr("receiver")}
@@ -124,7 +124,7 @@ func TestDMSendsToRecipientAndSenderConfirmation(t *testing.T) {
 }
 
 func TestDMValidation(t *testing.T) {
-	s := NewServer()
+	s := NewServer(nil)
 	c, conn := newTestClient()
 
 	s.DM(c, []string{"/dm", "bob", "hi"})
