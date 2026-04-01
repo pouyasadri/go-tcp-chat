@@ -1,14 +1,26 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net"
 
 	"github.com/pouyasadri/go-tcp-chat/internal/chat"
+	"github.com/pouyasadri/go-tcp-chat/internal/store/sqlite"
 )
 
 func main() {
-	s := chat.NewServer()
+	store, err := sqlite.Open("chat.db")
+	if err != nil {
+		log.Fatal("unable to open sqlite store: ", err)
+	}
+	defer store.Close()
+
+	if err := store.Migrate(context.Background()); err != nil {
+		log.Fatal("unable to run migrations: ", err)
+	}
+
+	s := chat.NewServer(store)
 	go s.Run()
 
 	listener, err := net.Listen("tcp", ":8080")
