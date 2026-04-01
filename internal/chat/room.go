@@ -3,6 +3,7 @@ package chat
 import "net"
 
 type Room struct {
+	ID      int64
 	Name    string
 	Members map[net.Addr]*Client
 }
