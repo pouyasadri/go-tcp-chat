@@ -153,6 +153,43 @@ func (s *Store) ListRoomMessages(ctx context.Context, roomID int64, limit int) (
 	return messages, nil
 }
 
+func (s *Store) ListRoomMessagesBefore(ctx context.Context, roomID, beforeID int64, limit int) ([]store.Message, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT id, room_id, sender_user_id, sender_nick, body, created_at
+		 FROM messages
+		 WHERE room_id = ? AND id < ?
+		 ORDER BY id DESC
+		 LIMIT ?`,
+		roomID,
+		beforeID,
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list room messages before: %w", err)
+	}
+	defer rows.Close()
+
+	messages := make([]store.Message, 0)
+	for rows.Next() {
+		var msg store.Message
+		if err := rows.Scan(&msg.ID, &msg.RoomID, &msg.SenderUserID, &msg.SenderNick, &msg.Body, &msg.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan message before: %w", err)
+		}
+		messages = append(messages, msg)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate messages before: %w", err)
+	}
+
+	return messages, nil
+}
+
 func (s *Store) getUserByID(ctx context.Context, id int64) (store.User, error) {
 	var user store.User
 	err := s.db.QueryRowContext(
