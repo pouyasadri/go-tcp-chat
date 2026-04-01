@@ -13,6 +13,7 @@ const (
 	CMDLogin
 	CMDLogout
 	CMDWhoAmI
+	CMDHistory
 	CMDQuit
 )
 
@@ -49,6 +50,8 @@ func parseInput(line string) (CommandID, []string, bool) {
 		return CMDLogout, args, true
 	case "/whoami":
 		return CMDWhoAmI, args, true
+	case "/history":
+		return CMDHistory, args, true
 	case "/quit":
 		return CMDQuit, args, true
 	default:
