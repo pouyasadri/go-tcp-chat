@@ -4,7 +4,7 @@
 ![Go Version](https://img.shields.io/github/go-mod/go-version/pouyasadri/go-tcp-chat)
 ![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fpouyasadri%2Fgo--tcp--chat-blue?logo=github)
 
-A lightweight TCP chat server written in Go. It supports multiple clients, room-based messaging, channel-driven command handling, and direct messages over raw TCP.
+A lightweight TCP chat server written in Go. It supports multi-room messaging, direct messages, account authentication, and persisted room history over raw TCP.
 
 ## Why this project
 
@@ -13,13 +13,16 @@ This project demonstrates:
 - Concurrent network programming with Go (`net`, goroutines, channels)
 - Event-loop style command handling in the server
 - Room-based message broadcast model
+- Authentication flow (`/register`, `/login`, `/logout`, `/whoami`)
+- Persisted room history with pagination (`/history`)
 - Direct messaging inside a room via `/dm`
 - Defensive input handling and deterministic output behavior
 
 ## Tech stack
 
 - Go 1.26
-- Standard library only
+- SQLite persistence (`modernc.org/sqlite`)
+- Password hashing with `bcrypt` (`golang.org/x/crypto`)
 - GitHub Actions for CI + GHCR image publishing
 
 ## Architecture
@@ -29,10 +32,14 @@ flowchart LR
     A[Client A - nc] --> L[TCP Listener :8080]
     B[Client B - nc] --> L
     L --> S[Server command loop]
+    S --> Auth[Auth commands]
     S --> R1[Room: general]
     S --> R2[Room: random]
-    S --> D[Direct Message /dm]
-    R1 --> O[Broadcast to room members]
+    S --> H[/history command]
+    S --> D[/dm command]
+    S --> DB[(SQLite)]
+    R1 --> O[Broadcast to local room members]
+    H --> DB
     D --> O
 ```
 
@@ -57,6 +64,14 @@ flowchart LR
 │       ├── room.go
 │       ├── server.go
 │       └── server_test.go
+│   └── store/
+│       ├── store.go
+│       └── sqlite/
+│           ├── migrations/
+│           │   └── 001_init.sql
+│           ├── repository.go
+│           ├── sqlite.go
+│           └── sqlite_test.go
 ├── go.mod
 └── README.md
 ```
@@ -68,6 +83,7 @@ go run ./cmd/chat-server
 ```
 
 Server listens on `:8080`.
+By default it creates/uses `chat.db` in the project root.
 
 ## Run with Docker
 
@@ -105,7 +121,19 @@ Then use commands like:
 - `/login <username> <password>` login with an existing account
 - `/logout` clear auth session for current connection
 - `/whoami` show current identity state
+- `/history` show latest 20 messages in current room
+- `/history 50` show latest 50 messages
+- `/history before <message_id> <n>` paginate older messages
 - `/quit` disconnect
+
+Example:
+
+```text
+/join general
+/msg hello
+/history
+/history before 42 10
+```
 
 ## Notes on design
 
@@ -113,6 +141,8 @@ Then use commands like:
 - A client must join a room before sending messages.
 - Direct messages only work for users in the same room.
 - `/dm` requires an authenticated user (`/register` or `/login`).
+- Rooms and messages are persisted to SQLite.
+- Room join prints recent message history (latest 20) when available.
 - Empty rooms are cleaned up automatically when users leave.
 - Unknown commands return an error plus help text to improve UX.
 
@@ -127,7 +157,6 @@ go vet ./...
 
 ## Next improvements
 
-- Add room message history command (`/history`) with pagination
 - Add graceful shutdown with context and OS signals
 - Add connection deadlines and idle timeout handling
 - Add integration tests for multi-client flows
