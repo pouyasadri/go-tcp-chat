@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+
+	storepkg "github.com/pouyasadri/go-tcp-chat/internal/store"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -87,6 +89,11 @@ func TestCreateAndGetUser(t *testing.T) {
 	_, err := store.CreateUser(context.Background(), "pouya", "hashed-password")
 	if err != nil {
 		t.Fatalf("create user: %v", err)
+	}
+
+	_, err = store.CreateUser(context.Background(), "pouya", "hashed-password")
+	if err != storepkg.ErrUserExists {
+		t.Fatalf("expected ErrUserExists, got %v", err)
 	}
 
 	user, err := store.GetUserByUsername(context.Background(), "pouya")
