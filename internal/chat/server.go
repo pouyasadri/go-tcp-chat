@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"net"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/pouyasadri/go-tcp-chat/internal/store"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Server struct {
@@ -18,6 +20,7 @@ type Server struct {
 }
 
 type persistence interface {
+	store.UserStore
 	store.RoomStore
 	store.MessageStore
 }
@@ -45,10 +48,109 @@ func (s *Server) Run() {
 			s.Msg(cmd.Client, cmd.Args)
 		case CMDDM:
 			s.DM(cmd.Client, cmd.Args)
+		case CMDRegister:
+			s.Register(cmd.Client, cmd.Args)
+		case CMDLogin:
+			s.Login(cmd.Client, cmd.Args)
+		case CMDLogout:
+			s.Logout(cmd.Client)
+		case CMDWhoAmI:
+			s.WhoAmI(cmd.Client)
 		case CMDQuit:
 			s.Quit(cmd.Client)
 		}
 	}
+}
+
+func (s *Server) Register(c *Client, args []string) {
+	if s.store == nil {
+		c.Err(fmt.Errorf("auth is unavailable"))
+		return
+	}
+	if len(args) < 3 {
+		c.Err(fmt.Errorf("usage: /register <username> <password>"))
+		return
+	}
+
+	username := normalizeUsername(args[1])
+	password := args[2]
+	if err := validateCredentials(username, password); err != nil {
+		c.Err(err)
+		return
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		c.Err(fmt.Errorf("failed to create account"))
+		return
+	}
+
+	user, err := s.store.CreateUser(context.Background(), username, string(hashed))
+	if err != nil {
+		if err == store.ErrUserExists {
+			c.Err(fmt.Errorf("username is already taken"))
+			return
+		}
+		c.Err(fmt.Errorf("failed to create account"))
+		return
+	}
+
+	c.UserID = &user.ID
+	c.NickName = user.Username
+	c.Msg(fmt.Sprintf("Registered and logged in as %s", user.Username))
+}
+
+func (s *Server) Login(c *Client, args []string) {
+	if s.store == nil {
+		c.Err(fmt.Errorf("auth is unavailable"))
+		return
+	}
+	if len(args) < 3 {
+		c.Err(fmt.Errorf("usage: /login <username> <password>"))
+		return
+	}
+
+	username := normalizeUsername(args[1])
+	password := args[2]
+
+	user, err := s.store.GetUserByUsername(context.Background(), username)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.Err(fmt.Errorf("invalid username or password"))
+			return
+		}
+		c.Err(fmt.Errorf("failed to login"))
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		c.Err(fmt.Errorf("invalid username or password"))
+		return
+	}
+
+	c.UserID = &user.ID
+	c.NickName = user.Username
+	c.Msg(fmt.Sprintf("Logged in as %s", user.Username))
+}
+
+func (s *Server) Logout(c *Client) {
+	if c.UserID == nil {
+		c.Msg("You are not logged in")
+		return
+	}
+
+	c.UserID = nil
+	c.NickName = "anonymous"
+	c.Msg("Logged out")
+}
+
+func (s *Server) WhoAmI(c *Client) {
+	if c.UserID == nil {
+		c.Msg("You are anonymous")
+		return
+	}
+
+	c.Msg(fmt.Sprintf("You are logged in as %s (id=%d)", c.NickName, *c.UserID))
 }
 
 func (s *Server) NewClient(conn net.Conn) {
@@ -160,7 +262,7 @@ func (s *Server) Msg(c *Client, args []string) {
 
 	msg := strings.Join(args[1:], " ")
 	if s.store != nil {
-		_, err := s.store.SaveMessage(context.Background(), c.Room.ID, nil, c.NickName, msg)
+		_, err := s.store.SaveMessage(context.Background(), c.Room.ID, c.UserID, c.NickName, msg)
 		if err != nil {
 			c.Err(fmt.Errorf("failed to persist message: %w", err))
 			return
@@ -176,6 +278,10 @@ func (s *Server) DM(c *Client, args []string) {
 	}
 	if len(args) < 3 {
 		c.Err(fmt.Errorf("usage: /dm <nick> <message>"))
+		return
+	}
+	if c.UserID == nil {
+		c.Err(fmt.Errorf("you must login before sending direct messages"))
 		return
 	}
 
@@ -201,6 +307,23 @@ func (s *Server) DM(c *Client, args []string) {
 	message := strings.Join(args[2:], " ")
 	recipient.Msg(fmt.Sprintf("[DM from %s] %s", c.NickName, message))
 	c.Msg(fmt.Sprintf("[DM to %s] %s", targetNick, message))
+}
+
+func normalizeUsername(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
+}
+
+func validateCredentials(username, password string) error {
+	if len(username) < 3 || len(username) > 32 {
+		return fmt.Errorf("username must be 3-32 characters")
+	}
+	if strings.Contains(username, " ") {
+		return fmt.Errorf("username cannot contain spaces")
+	}
+	if len(password) < 8 {
+		return fmt.Errorf("password must be at least 8 characters")
+	}
+	return nil
 }
 
 func (s *Server) Quit(c *Client) {
