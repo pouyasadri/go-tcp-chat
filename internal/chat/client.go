@@ -12,6 +12,7 @@ type Client struct {
 	NickName string
 	Room     *Room
 	Commands chan<- Command
+	UserID   *int64
 }
 
 func (c *Client) ReadInput() {
@@ -63,5 +64,9 @@ func (c *Client) printHelp() {
 	c.Msg("/rooms           - List rooms")
 	c.Msg("/msg <message>   - Send message to current room")
 	c.Msg("/dm <nick> <msg> - Send direct message")
+	c.Msg("/register <user> <pass> - Create account")
+	c.Msg("/login <user> <pass>    - Login to account")
+	c.Msg("/logout          - Logout current session")
+	c.Msg("/whoami          - Show auth identity")
 	c.Msg("/quit            - Disconnect")
 }
