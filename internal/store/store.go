@@ -2,8 +2,11 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+var ErrUserExists = errors.New("user already exists")
 
 type User struct {
 	ID           int64
